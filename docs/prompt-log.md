@@ -91,5 +91,56 @@
       </td>
       <td>(to be filled by the team after reviewing the answer)</td>
     </tr>
+    <tr>
+      <td>11/23/2026</td>
+      <td>Gamal Emad</td>
+      <td>Requirements</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        You are a requirements engineer helping on a college backend project (Advanced Software Engineering, CS352, Node.js) Project: PayLink, a bill-payment and wallet backend. The attached Student Brief is the source, we are in phase 1 requirements and a teammate already finished US-01 to US-08 (FR-1 to FR-8). My share is US-09 to US-16 (FR-9 to FR-16). STORY FORMAT (use exactly this) ID: US-number Source: FR-number Priority: Must Title: short name Story: As a role, I want capability, so that benefit. Acceptance criteria: AC-1 Given state / When action / Then observable, testable result ... Hard case: number(s) from section 2.7, or "None" Business rule: rule(s) from section 2.6, or "None" Notes: decisions that apply to this story After each story add two short lines, "Hard case:" and "Business rule:", explaining why the story does or does not relate to each. RULES: Every "Then" has a concrete checkable value. Use the section 2.5 state names exactly. Money is exact decimal, never floating point. Write only what the brief says, do not invent extra rules. Cross-reference other stories instead of duplicating their criteria. PROGRESS SO FAR AND DECISIONS ALREADY MADE (US-01 to US-08; stay consistent)... if there any ambiguities you found ASK ME DO NOT HANDLE IT YOUR SELF. Output should explain why each story relates to either the hard cases or business logic, and why it does not.
+      </td>
+      <td>
+        Identified 11 ambiguities across US-09 to US-16 that would affect the acceptance criteria (such as rejected payment storage, limit basis, idempotency details, TopUpNet timeout/callbacks, and rounding) and asked for decisions before writing the stories.
+      </td>
+      <td>Fixed, some of the questions asked were already answered in sections 2.5 to 2.7 of the brief and required pointing the model back to those sections</td>
+    </tr>
+    <tr>
+      <td>11/23/2026</td>
+      <td>Gamal Emad</td>
+      <td>Requirements</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        These are the decisions to be made for the new ambiguities<br>
+        US-09: reject the payment with the reason "Amount outside the allowed payment range."<br>
+        US-09: apply to the bill amount only. The daily total includes Completed payments and payments whose funds are still held in FundsHeld, SentToBiller, or Unknown. Each payment is counted once, not once per state.<br>
+        US-09: For billers that support live inquiry, the customer must complete an inquiry and pay the exact amount returned. For billers without live inquiry, the customer enters the amount and proceeds without inquiry. An inquiry result is valid for the current payment attempt only and cannot be reused for a later attempt<br>
+        US-10: An idempotency key is unique per customer. A repeat with the same details returns the original result, different details return an error. A duplicate arriving during processing returns the original result when ready. The key does not expire.<br>
+        US-11: The 10-second timeout does not apply to TopUpNet. The payment remains SentToBiller until a callback arrives<br>
+        US-13: The system re-queries an Unknown payment up to three times, after 1, 5, and 15 minutes, when the biller supports status queries. TopUpNet payments remain SentToBiller until a callback is received<br>
+        US-14: Ignore and log callbacks that cannot be applied to the payment’s current state; do not change the payment state. Callback authentication is outside this requirement<br>
+        US-15: Hard Case 8 is linked to US-15. Adding a new biller requires only a new integration and configuration; existing modules remain unchanged<br>
+        US-16: The 1.5% mobile top-up fee is rounded to two decimal places using the half-up rule
+      </td>
+      <td>
+        First complete iteration of US-09 to US-16 following the required format, hard cases, and business rules, while flagging 3 remaining minor open points.
+      </td>
+      <td>Accepted, all 8 user stories followed the exact format and incorporated the decisions, recording the remaining ambiguities</td>
+    </tr>
+    <tr>
+      <td>11/23/2026</td>
+      <td>Gamal Emad</td>
+      <td>Requirements</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        1. If the amount is outside the allowed range, the payment is recorded as rejected . If the amount does not match the inquiry, the request returns an error and no payment is created. A request that does not create a payment does not use its idempotency key.<br>
+        2. The system retries 1, 5, and 15 minutes after the payment becomes unknown. If a callback refers to a payment that does not exist, the system ignores and logs it.<br>
+        3. The promotion includes both its start date and end date.<br>
+        refactor these decisions for its US and resend it
+      </td>
+      <td>
+        Refactored US-09, US-10, US-11, US-13, US-14, and US-16 to resolve the remaining ambiguities and presented the final complete set of user stories (US-09 to US-16).
+      </td>
+      <td>Accepted, all ambiguities were resolved cleanly without overlapping with other functional requirements</td>
+    </tr>
   </tbody>
 </table>
