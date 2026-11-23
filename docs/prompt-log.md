@@ -79,19 +79,6 @@
       <td>Rejected, some of the new criteria created started overlapping with future functional requirements which may affect them negatively</td>
     </tr>
     <tr>
-      <td>Current Date</td>
-      <td>Student Name</td>
-      <td>Design/Requirements/Devops</td>
-      <td>Tool + Model</td>
-      <td>
-        Enter Prompt Here
-      </td>
-      <td>
-        Summary
-      </td>
-      <td>(to be filled by the team after reviewing the answer)</td>
-    </tr>
-    <tr>
       <td>11/23/2026</td>
       <td>Gamal Emad</td>
       <td>Requirements</td>
@@ -141,6 +128,68 @@
         Refactored US-09, US-10, US-11, US-13, US-14, and US-16 to resolve the remaining ambiguities and presented the final complete set of user stories (US-09 to US-16).
       </td>
       <td>Accepted, all ambiguities were resolved cleanly without overlapping with other functional requirements</td>
+    </tr>
+    <tr>
+      <td>11/23/2026</td>
+      <td>Omar AbdulAziz</td>
+      <td>Design</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        To generate the state diagram of the payment, i am going to use the PlanetUML tool, specifically the web server version. I need you to generate a prompt/code that i can input straight into PlanetUML and generate the state diagram Follow the state table exactly and do not add any states or assumptions, if there are any ambiguities, list them at the end like we did with the user stories. The output should be a single prompt that fulfills all the payment states
+      </td>
+      <td>
+        Generated PlanetUML prompt for the payment state diagram
+      </td>
+      <td>Accepted, followed the required states in order and dealt with a small ambiguity (state end point) correctly</td>
+    </tr>
+    <tr>
+      <td>11/23/2026</td>
+      <td>Omar AbdulAziz</td>
+      <td>Design</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        Now i am going to generate the Sequence Diagram — "Pay a Bill", using the step by step instructions provided in section 2.2 I need you to generate a PlanetUML prompt that creates a clear and unclustered diagram showing all the steps that are needed to complete a payment Use a or a separate note/fragment only for distinct interaction behaviors—such as no inquiry / local fee preview for non-inquiry billers. In case of ambiguities, make small assumptions that do not alter the main steps significantly.  The output should be a single prompt that fulfills all the steps with a list of ambiguities that were solved or need to be solved
+      </td>
+      <td>
+        Generated a PlanetUML prompt for the "Pay a Bill" sequence diagram using the step by step instructions provided in the brief
+      </td>
+      <td>Fixed (in the next prompt), labeled a state change after the wrong step and did not add a fail branch for the fraud check</td>
+    </tr>
+    <tr>
+      <td>11/23/2026</td>
+      <td>Omar AbdulAziz</td>
+      <td>Design</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        Here are the decisions for the mentioned ambiguities:<br>
+      N1: two separate steps/requests, keeping one clear main sequence diagram with a brief note/fragment for the inquiry-then-pay handoff.<br>
+      N2:  while keeping the main flow focused on synchronous confirmation, add a concise branch/note showing SentToBiller  -> later callback (TopUpNet) or batch/next-morning file (NetCo)<br>
+      N3: Immediate release upon entering Failed<br>
+      N4: keep the Notifications call tied to Completed or Failed (or Rejected if included), and inside the Unknown state branch show a "Payment being processed" response without sending a completion/failure receipt.<br>
+      N5: Dedicated Reconciliation module found in section 3.1 Modules<br>
+      N6: Keep commission at completion<br> 
+      Some other points to reconsider:<br>
+      1- Placing the SentToBiller state note right after Payment Request is more natural since Section 2.5 defines the transition as "Request sent to biller -> SentToBiller"<br>
+      2- If fraud check fails or funds are insufficient, you can add a brief alt branch showing Rejected before Step 6<br>
+      Edit the previous prompt with these changes without making any other decisions outside of these points<br>
+      </td>
+      <td>
+        Resolved ambiguities found in the sequence diagram
+      </td>
+      <td>Accepted, impplemented the decisions correctly with minor changes</td>
+    </tr>
+    <tr>
+      <td>Current Date</td>
+      <td>Student Name</td>
+      <td>Design/Requirements/Devops</td>
+      <td>Tool + Model</td>
+      <td>
+        Enter Prompt Here
+      </td>
+      <td>
+        Summary
+      </td>
+      <td>(to be filled by the team after reviewing the answer)</td>
     </tr>
   </tbody>
 </table>

@@ -1,0 +1,117 @@
+@startuml
+title PayLink - Pay a Bill
+
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam responseMessageBelowArrow true
+autonumber "<b>0"
+
+actor Customer
+participant "Payment\nProcessing" as PP
+participant "Accounts\nand Wallet" as WL
+participant "Biller\nCatalog" as BC
+participant "Fees and\nCommissions" as FE
+participant "Fraud\nChecks" as FR
+participant "Biller\nIntegration" as BI
+participant "Biller\n(e.g. ElectroCo)" as BL
+participant "Notifications" as NT
+participant "Reconciliation" as RC
+
+== 1. Login and limits ==
+Customer -> PP : Login
+PP -> WL : Identify customer and\nget verification level
+WL --> PP : Customer, level, daily limit
+
+== 2. Bill inquiry (separate request) ==
+Customer -> PP : Select biller, enter bill details
+PP -> BC : Get biller and required fields
+BC --> PP : Biller (active, min/max amount)
+
+alt Biller supports live inquiry
+    PP -> BI : Inquiry(bill details)
+    BI -> BL : Inquiry request
+    BL --> BI : Amount due (350.00 EGP)
+    BI --> PP : Amount due
+else No live inquiry (e.g. TopUpNet, NetCo)
+    note over PP, FE
+        No call to the biller.
+        Customer enters the amount.
+        Fee and total are calculated locally.
+    end note
+end
+
+== 3. Fee and total ==
+PP -> FE : Calculate fee(biller, amount)
+FE --> PP : Fee (2.50 EGP)
+PP --> Customer : Amount, fee and total (352.50 EGP)
+
+note over Customer, PP
+    Inquiry and payment are two separate requests.
+    The inquiry above ends here. The payment below
+    starts when the customer confirms.
+end note
+
+Customer -> PP : Confirm payment\n(with idempotency key)
+
+== 4. Fraud checks ==
+PP -> FR : Check(daily limit, velocity, blocked account)
+FR --> PP : Pass or fail
+
+alt Fraud check fails or funds are insufficient
+    note right of PP : State: Rejected
+    PP --> Customer : Payment rejected (clear reason)
+    PP -> NT : Payment result event (Rejected)
+    NT --> Customer : SMS and push notification
+else Checks pass and wallet has enough funds
+    == 5. Hold the money ==
+    PP -> WL : Hold(total)
+    WL --> PP : Funds held\n(available down, held up)
+    note right of PP : State: FundsHeld
+
+    == 6. Call the biller ==
+    PP -> BI : Pay(unique reference, amount)
+    BI -> BL : Payment request
+    note right of PP : State: SentToBiller
+
+    == 7. Confirmation ==
+    alt Biller confirms (paid)
+        BL --> BI : Paid
+        BI --> PP : Confirmed
+        PP -> WL : Turn hold into final charge,\ncredit fee income,\nrecord agent commission (if agent)
+        WL --> PP : Done
+        note right of PP : State: Completed
+        PP -> NT : Payment result event (Completed)
+    else Biller refuses
+        BL --> BI : Refused (error code)
+        BI --> PP : Refused
+        note right of PP : State: Failed
+        PP -> WL : Release hold (immediately)
+        WL --> PP : Funds returned
+        note right of PP : State: Refunded
+        PP -> NT : Payment result event (Failed)
+    else No answer within 10 seconds
+        BI --> PP : Timeout
+        note right of PP : State: Unknown\nMoney stays held
+        PP --> Customer : Payment being processed\n(no completion or failure receipt sent)
+    end
+
+    note over PP, BL
+        Asynchronous and batch billers (main flow above is synchronous):
+        State stays SentToBiller until the result arrives.
+        - TopUpNet: accepts first, then calls the callback URL later
+          with "success" or "failed".
+        - NetCo: payments go in the daily file; the result file
+          arrives the next morning.
+    end note
+
+    == 8. Receipt ==
+    NT --> Customer : SMS and push notification\n(Completed or Failed)
+end
+
+== 9. Night reconciliation ==
+BL -> RC : Settlement file (all payments received)
+RC -> PP : Read PayLink payment records
+PP --> RC : Payments
+RC -> RC : Compare with settlement file
+RC --> RC : Report any difference
+@enduml
