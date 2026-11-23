@@ -1,0 +1,45 @@
+@startuml
+title PayLink Payment Life Cycle
+
+hide empty description
+
+state Initiated
+state FundsHeld
+state SentToBiller
+state Completed
+state Rejected
+state Failed
+state Unknown
+state Refunded
+
+[*] --> Initiated
+
+Initiated --> FundsHeld : Fraud checks pass and\nwallet has enough funds
+Initiated --> Rejected : Fraud check fails or\nfunds are insufficient
+
+FundsHeld --> SentToBiller : Request sent to biller
+
+SentToBiller --> Completed : Biller confirms
+SentToBiller --> Failed : Biller refuses
+SentToBiller --> Unknown : No answer within timeout
+
+Unknown --> Completed : Biller later confirms\n(callback, retry or settlement file)
+Unknown --> Failed : Biller later refuses, or\nreconciliation finds no payment
+
+Failed --> Refunded : Hold released to the wallet
+
+Completed --> [*]
+Rejected --> [*]
+Refunded --> [*]
+
+note right of Unknown
+  Never refunded automatically.
+  Money is returned only once the system
+  is sure the biller did not receive it.
+end note
+
+note bottom of Refunded
+  Completed, Rejected and Refunded
+  are final states.
+end note
+@enduml
