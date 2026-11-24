@@ -1,0 +1,398 @@
+@startuml
+title PayLink - Domain Class Diagram
+
+hide empty members
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ---------- Enums ----------
+enum VerificationLevel {
+  BASIC
+  VERIFIED
+}
+enum PaymentState {
+  INITIATED
+  FUNDS_HELD
+  SENT_TO_BILLER
+  COMPLETED
+  REJECTED
+  FAILED
+  UNKNOWN
+  REFUNDED
+}
+enum LedgerEntryType {
+  TOP_UP
+  HOLD
+  RELEASE
+  FINAL_CHARGE
+  FEE_INCOME
+  COMMISSION
+}
+enum NotificationStatus {
+  PENDING
+  DELIVERED
+  UNDELIVERED
+}
+' [FIX 4] new enum so the system can be an actor
+enum ActorType {
+  ACCOUNT
+  SYSTEM
+}
+
+' ---------- Accounts and Wallet ----------
+' [FIX 1] verificationLevel and dailyLimit() moved up to Account
+abstract class Account {
+  id
+  name
+  email
+  blocked
+  blockedUntil
+  verificationLevel
+  createdAt
+  isBlocked(now)
+  block(reason, by)
+  unblock(by)
+  blockTemporarily(duration)
+  dailyLimit()
+}
+' [FIX 1] verificationLevel removed from Customer (inherited from Account)
+class Customer {
+  upgradeToVerified()
+  isEligibleForUpgrade(now, waitingPeriod)
+}
+' [FIX 1] verificationLevel removed from Agent (inherited from Account)
+class Agent
+class SupportEmployee
+class Admin
+
+class Wallet {
+  id
+  availableBalance()
+  heldBalance()
+  hasSufficientFunds(total)
+  placeHold(payment, total)
+  confirmHold(hold)
+  releaseHold(hold)
+  credit(amount, type, reference)
+  transactionHistory()
+}
+class LedgerEntry {
+  id
+  type
+  amount
+  paymentId
+  agentId
+  createdAt
+  reason
+}
+class Hold {
+  id
+  amount
+  status
+  charge()
+  release()
+  isActive()
+}
+class TopUp {
+  id
+  amount
+  method
+  idempotencyKey
+  apply()
+}
+
+' ---------- Biller Catalog ----------
+class Biller {
+  id
+  name
+  protocol
+  active
+  supportsLiveInquiry
+  supportsStatusQuery
+  enable()
+  disable()
+  isAvailableForPayment()
+}
+class BillerService {
+  id
+  name
+  requiredFields
+  active
+  validateInput(values)
+  validateAmount(amount)
+}
+class AmountRange {
+  min
+  max
+  isValid(globalMin, globalMax)
+  contains(amount)
+}
+
+' ---------- Fees and Commissions ----------
+class FeeRule {
+  id
+  type
+  parameters
+}
+interface FeeStrategy {
+  calculate(amount)
+}
+class FixedFeeStrategy
+class PercentageFeeStrategy
+class TieredFeeStrategy
+class Promotion {
+  id
+  startDate
+  endDate
+  isActive(date)
+  overlaps(other)
+}
+class FeeQuote {
+  billAmount
+  fee
+  total
+  isPromotional
+}
+class CommissionPolicy {
+  percentage
+  calculate(fee)
+}
+
+' ---------- Payment Processing ----------
+class Payment {
+  id
+  reference
+  idempotencyKey
+  amount
+  state
+  rejectionReason
+  failureReason
+  createdAt
+  total()
+  isFinal()
+  countsTowardDailyTotal()
+  holdFunds(hold)
+  reject(reason)
+  markSentToBiller()
+  complete()
+  fail(reason)
+  markUnknown()
+  refund()
+  canTransitionTo(target)
+}
+class PaymentTransition {
+  fromState
+  toState
+  event
+  reason
+  occurredAt
+}
+class Inquiry {
+  id
+  amountDue
+  used
+  createdAt
+  markUsed()
+  matchesAmount(amount)
+}
+class IdempotencyRecord {
+  key
+  requestFingerprint
+  matches(request)
+}
+class RetryCommand {
+  attempt
+  scheduledAfter
+  execute()
+  canExecute()
+}
+
+' ---------- Fraud Checks ----------
+interface FraudRule {
+  setNext(rule)
+  check(context)
+}
+class BlockedAccountRule
+class AmountRangeRule
+class DailyLimitRule
+class VelocityRule
+
+' ---------- Biller Integration ----------
+interface BillerAdapter {
+  inquire(billInput)
+  pay(reference, amount, billInput)
+  queryStatus(reference)
+}
+class ElectroCoAdapter
+class AquaCoAdapter
+class TopUpNetAdapter
+class NetCoAdapter
+class BillerCallback {
+  id
+  result
+  receivedAt
+  outcome
+  ignoreReason
+}
+class BillerResponseLog {
+  request
+  response
+  receivedAt
+}
+
+' ---------- Notifications ----------
+class Notification {
+  id
+  channel
+  body
+  status
+  attemptCount()
+  recordAttempt(success, error)
+  markDelivered()
+  markUndelivered()
+  canRetry(maxRetries)
+}
+class DeliveryAttempt {
+  attemptNumber
+  attemptedAt
+  success
+  error
+}
+class NotificationTemplate {
+  id
+  channel
+  text
+  render(params)
+}
+
+' ---------- Reconciliation ----------
+class SettlementFile {
+  id
+  date
+  receivedAt
+  findLine(reference)
+}
+class SettlementLine {
+  paymentReference
+  amount
+  status
+}
+class ReconciliationReport {
+  id
+  date
+  generatedAt
+  differenceCount()
+}
+class ReconciliationDifference {
+  id
+  type
+  paylinkAmount
+  fileAmount
+  reviewStatus
+}
+
+' ---------- Cross-cutting ----------
+' [FIX 4] actorType added; actor link below is optional
+class AuditRecord {
+  id
+  actorType
+  action
+  reason
+  subjectType
+  subjectId
+  oldValue
+  newValue
+  amount
+  occurredAt
+}
+class ConfigurationSetting {
+  key
+  value
+  updatedAt
+  validate()
+}
+
+' ---------- Inheritance ----------
+Account <|-- Customer
+Account <|-- Agent
+Account <|-- SupportEmployee
+Account <|-- Admin
+
+FeeStrategy <|.. FixedFeeStrategy
+FeeStrategy <|.. PercentageFeeStrategy
+FeeStrategy <|.. TieredFeeStrategy
+
+FraudRule <|.. BlockedAccountRule
+FraudRule <|.. AmountRangeRule
+FraudRule <|.. DailyLimitRule
+FraudRule <|.. VelocityRule
+
+BillerAdapter <|.. ElectroCoAdapter
+BillerAdapter <|.. AquaCoAdapter
+BillerAdapter <|.. TopUpNetAdapter
+BillerAdapter <|.. NetCoAdapter
+
+' ---------- Accounts and Wallet relations ----------
+Customer "1" -- "1" Wallet : owns
+Agent "1" -- "1" Wallet : owns
+Wallet "1" *-- "0..*" LedgerEntry
+Wallet "1" -- "0..*" Hold
+' [FIX 2] 1 to 0..1: a duplicate or conflicting key creates no new ledger entry
+TopUp "1" -- "0..1" LedgerEntry : creates
+TopUp "0..*" -- "1" Wallet
+LedgerEntry ..> LedgerEntryType
+' [FIX 1] one dependency from Account replaces the two separate ones
+Account ..> VerificationLevel
+
+' ---------- Biller Catalog relations ----------
+Biller "1" *-- "1..*" BillerService
+BillerService "1" *-- "1" AmountRange
+BillerService "0..*" -- "1" FeeRule
+Biller "1" -- "0..*" Promotion
+
+' ---------- Fees relations ----------
+FeeRule "1" -- "1" FeeStrategy : creates
+Payment "1" *-- "1" FeeQuote
+Inquiry "1" *-- "1" FeeQuote
+
+' ---------- Payment relations ----------
+Payment "0..*" -- "1" Customer : pays for
+Payment "0..*" -- "1" Account : paid by (payerId)
+Payment "0..*" -- "0..1" Agent : made by (agentId)
+Payment "0..*" -- "1" Biller
+Payment "0..*" -- "1" BillerService
+' [FIX 3] 1..* changed to 0..*
+Payment "1" *-- "0..*" PaymentTransition
+Payment "1" -- "0..1" Hold
+Payment "1" -- "1" IdempotencyRecord
+Payment "0..1" -- "0..1" Inquiry : uses
+Payment "1" -- "0..*" BillerCallback
+Payment "1" *-- "0..*" BillerResponseLog
+Payment "1" -- "0..*" Notification
+Payment "1" -- "0..3" RetryCommand
+Payment ..> PaymentState
+LedgerEntry "0..*" -- "0..1" Payment
+Payment ..> CommissionPolicy : commission on completion
+
+' ---------- Fraud relations ----------
+FraudRule "1" o-- "0..1" FraudRule : next
+
+' ---------- Notifications relations ----------
+Notification "1" *-- "0..4" DeliveryAttempt
+Notification "0..*" -- "1" NotificationTemplate
+Notification ..> NotificationStatus
+
+' ---------- Reconciliation relations ----------
+SettlementFile "1" *-- "1..*" SettlementLine
+SettlementFile "0..*" -- "1" Biller
+ReconciliationReport "1" *-- "0..*" ReconciliationDifference
+ReconciliationDifference "0..*" -- "0..1" Payment
+
+' ---------- Cross-cutting relations ----------
+' [FIX 4] actor is optional: empty when actorType = SYSTEM
+AuditRecord "0..*" -- "0..1" Account : actor
+AuditRecord ..> ActorType
+ConfigurationSetting "0..*" -- "1" Admin : updated by
+@enduml

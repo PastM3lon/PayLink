@@ -1,0 +1,105 @@
+@startuml use-case
+title PayLink - Use-case diagram
+left to right direction
+skinparam packageStyle rectangle
+
+actor Customer
+actor Agent
+actor "Support Employee" as Support
+actor Admin
+actor "Scheduler\n(timers)" as Scheduler
+
+actor "Biller\n(ElectroCo, AquaCo,\nTopUpNet, NetCo)" as Biller
+actor "SMS / Email /\nPush Provider" as Notifier
+
+rectangle "PayLink Backend" {
+
+  ' --- Customer ---
+  usecase "Register account" as UC_Register
+  usecase "View wallet balance\nand transaction history" as UC_Wallet
+  usecase "Top up wallet" as UC_TopUp
+  usecase "View billers and\nrequired fields" as UC_Billers
+  usecase "Run bill inquiry" as UC_Inquiry
+  usecase "Pay a bill" as UC_Pay
+  usecase "Request refund" as UC_ReqRefund
+
+  ' --- Steps inside a payment ---
+  usecase "Run fraud checks" as UC_Fraud
+  usecase "Check payment velocity" as UC_Velocity
+  usecase "Hold funds" as UC_Hold
+  usecase "Submit payment to biller" as UC_Submit
+  usecase "Release held funds\non payment failure" as UC_Release
+  usecase "Send notification" as UC_Notify
+
+  ' --- Agent ---
+  usecase "Pay bill as agent" as UC_AgentPay
+  usecase "Credit agent commission" as UC_Commission
+
+  ' --- Asynchronous and scheduled work ---
+  usecase "Handle biller callback" as UC_Callback
+  usecase "Re-query Unknown payment" as UC_Requery
+  usecase "Retry failed notification" as UC_Retry
+  usecase "Reconcile settlement file" as UC_Reconcile
+
+  ' --- Support ---
+  usecase "Search payment by reference\nand view history" as UC_Search
+  usecase "Block / unblock account" as UC_Block
+  usecase "Approve refund" as UC_Approve
+  usecase "Review reconciliation report" as UC_Report
+
+  ' --- Admin ---
+  usecase "Manage billers and services" as UC_ManageBillers
+  usecase "Edit fees, limits and\nconfiguration" as UC_Config
+  usecase "Upgrade verification level" as UC_Upgrade
+  usecase "View daily totals" as UC_Totals
+  usecase "View audit log" as UC_Audit
+}
+
+' Customer
+Customer --> UC_Register
+Customer --> UC_Wallet
+Customer --> UC_TopUp
+Customer --> UC_Billers
+Customer --> UC_Inquiry
+Customer --> UC_Pay
+Customer --> UC_ReqRefund
+
+' Agent
+Agent --> UC_AgentPay
+Agent --> UC_TopUp
+Agent --> UC_Wallet
+Agent --> UC_Billers
+
+' Support
+Support --> UC_Search
+Support --> UC_Block
+Support --> UC_Approve
+Support --> UC_Report
+
+' Admin
+Admin --> UC_ManageBillers
+Admin --> UC_Config
+Admin --> UC_Upgrade
+Admin --> UC_Totals
+Admin --> UC_Audit
+
+' Include / extend / generalization
+UC_Pay ..> UC_Inquiry : <<include>>
+UC_Pay ..> UC_Fraud : <<include>>
+UC_Pay ..> UC_Hold : <<include>>
+UC_Pay ..> UC_Submit : <<include>>
+UC_Velocity ..> UC_Fraud : <<extend>>
+UC_Release ..> UC_Pay : <<extend>>
+UC_AgentPay --|> UC_Pay
+
+' System and external actors
+Biller --> UC_Submit
+Biller --> UC_Callback
+Biller --> UC_Reconcile
+Notifier --> UC_Notify
+Notifier --> UC_Retry
+Scheduler --> UC_Requery
+Scheduler --> UC_Retry
+Scheduler --> UC_Reconcile
+
+@enduml
