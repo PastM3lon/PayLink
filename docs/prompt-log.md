@@ -179,6 +179,50 @@
       <td>Accepted, impplemented the decisions correctly with minor changes</td>
     </tr>
     <tr>
+      <td>11/24/2026</td>
+      <td>Omar AbdulAziz</td>
+      <td>Design</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        You are helping with designing the classes and methods needed for the PayLink applications that will be needed in phase 2 for implementation List all classes and methods using the user stories provided in the requirements pack Focus on the Core domain concepts & relationships Focus on the entities, value objects, attributes, relationships, and domain behaviors that model PayLink—such as Customer, Agent, Account, Wallet, LedgerEntry, Hold, Payment, Biller, Service, fee/commission rules, Notification, and audit records. Your output should be a list of classes and methods that are going to be user later to generate a class diagram
+      </td>
+      <td>
+        Generated a list of classes that cover the core domain only
+      </td>
+      <td>Accepted, covers the core domain only, so controllers, repositories, and framework classes are left out. Each class lists the stories that justify it.</td>
+    </tr>
+    <tr>
+     <td>11/24/2026</td>
+      <td>Omar AbdulAziz</td>
+      <td>Design</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        All assumptions made make sense so keep the list as is with one small note to consider: In M5, just make sure the wording clearly refers to agent bill payments ( US-17 ) where the agent's wallet pays/holds the bill total (payerID / agentID on Payment) and receives the commission on completion rather than implying a debit on cash top-ups Now using the classes list generate a PlanetUML class diagram prompt, and keep note that design patterns and refactoring critiques formally due in Phase 2 so keep the diagram simple and unclustered
+      </td>
+      <td>
+        Generated a PlanetUML class diagram prompt using the generated class list
+      </td>
+      <td>Fixed (in the next prompt), some multiplicy errors were found that could lead to confusion in the future</td>
+    </tr>
+    <tr>
+      <td>11/24/2026</td>
+      <td>Omar AbdulAziz</td>
+      <td>Design</td>
+      <td>Claude Sonnet 5.5</td>
+      <td>
+        Here are some of the fixes to reconsider in the diagram<br>
+        1- Put verificationLevel (and daily-limit awareness) on Account  so both Customer and Agent inherit it consistently instead of duplicating it.<br> 
+        2- `TopUp "1" -- "1" LedgerEntry : creates` is slightly tight for US-04 AC-6 / AC-8 (duplicate/conflicting idempotency key creates 0 new top-up ledger entries)—consider `0..1`<br>
+        3- `Payment "1" *-- "1..*" PaymentTransition` assumes every payment has at least one transition, whereas `US-18` `AC-6` or rejected/invalid requests might either record a transition or reject immediately. Using `0..*` is safer unless every creation logs an initial transition.<br> 
+        4- `AuditRecord "0..*" -- "1" Account : actor` requires an `Account` actor, yet `US-25` (`AC-1`, `AC-2`, `AC-3`, `AC-18`, `AC-19`, `AC-20`) repeatedly specifies `who = the system` for automatic releases, commissions, and velocity blocks. Either make `actor` `0..1` or represent a `System` actor/source clearly <br> 
+        Generate a fixed PlanetUML Prompt that solves these ambiguities while keeping the same original format ( no significant changes)
+      </td>
+      <td>
+        Applied fixed to the class diagram prompt while leaving the format unchanged
+      </td>
+      <td>Accepted, fixed the ambiguities cleanly</td>
+    </tr>
+    <tr>
       <td>Current Date</td>
       <td>Student Name</td>
       <td>Design/Requirements/Devops</td>
