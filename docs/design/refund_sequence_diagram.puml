@@ -1,0 +1,86 @@
+@startuml
+title PayLink - Refund a Failed Payment
+
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam responseMessageBelowArrow true
+autonumber "<b>0"
+
+actor Customer
+participant "Payment\nProcessing" as PP
+participant "Accounts\nand Wallet" as WL
+participant "Biller\nIntegration" as BI
+participant "Biller\n(e.g. AquaCo)" as BL
+participant "Reconciliation" as RC
+participant "Notifications" as NT
+participant "Audit Log" as AL
+' [Q2] new participant for ignored callbacks and events
+participant "Callback /\nEvent Log" as EL
+
+== 1. Trigger: the payment becomes Failed ==
+alt A. Biller refuses (live biller, e.g. AquaCo)
+    note right of PP : State: SentToBiller
+    BL --> BI : Refused (error code)
+    BI --> PP : Refused\n(PayLink reason, not the raw code)
+else B. TopUpNet callback "failed"
+    note right of PP : State: SentToBiller
+    BL -> BI : Callback "failed" (payment reference)
+    BI -> PP : Callback result: failed
+else C. Re-query of an Unknown payment says refused
+    note right of PP : State: Unknown\nMoney stays held
+    PP -> BI : Status query (after 1, 5 or 15 minutes)
+    BI -> BL : Status request
+    BL --> BI : Refused
+    BI --> PP : Refused
+else D. Reconciliation finds no payment
+    note right of PP : State: Unknown\nMoney stays held
+    BL -> RC : Settlement file (payment not listed)
+    RC -> PP : Unknown payment not in file
+end
+
+' [Q3] NetCo next-morning result file is not drawn as a branch (NetCo is optional)
+note over PP, BL
+    Unknown is never refunded automatically.
+    After 3 unanswered re-queries it stays Unknown
+    and waits for reconciliation (no refund).
+    NetCo failures (next-morning result file) are not
+    drawn here because NetCo is optional.
+end note
+
+PP -> PP : fail(reason)
+note right of PP : State: Failed
+
+== 2. Release the hold and refund ==
+PP -> WL : Release hold (immediately)
+' [Q4] a hold that is not ACTIVE is a safe ignore, not an error
+WL -> WL : Hold is ACTIVE?\nYes: create release ledger entry\nfor the full total (amount + fee)\nNo: safe ignore, no entry
+WL --> PP : Funds returned\n(available up, held 0.00)
+PP -> PP : refund()
+note right of PP : State: Refunded (final)
+note over WL
+    No final charge, no fee income
+    and no agent commission are created.
+end note
+
+== 3. Audit record ==
+WL -> AL : Record release\n(who = system, when, why)
+
+== 4. Notification ==
+PP -> NT : Payment result event (Failed)
+NT --> Customer : SMS and push with a clear reason\n(says the money is returned)
+note over NT
+    No separate message on Refunded.
+    A provider failure never rolls back the refund.
+end note
+
+' [Q1] one single ignore path for any late or duplicate event
+== 5. Duplicate or late events ==
+opt Late or duplicate failure event or callback arrives
+    BL -> BI : Duplicate "failed", callback or any late result
+    BI -> PP : Result for the payment
+    PP -> PP : Payment already Refunded or in another\nfinal / non-eligible state?\nYes: ignore (state unchanged)
+    note over WL : No second release entry,\nbalances unchanged
+    ' [Q2] ignored events go to the callback / event log, not the audit log
+    PP -> EL : Log ignored callback or event
+end
+@enduml
