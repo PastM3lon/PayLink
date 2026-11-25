@@ -1,0 +1,213 @@
+@startuml
+!pragma layout smetana
+' Diagram 1: Phase 1 core system overview — layered modular monolith
+left to right direction
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam wrapWidth 150
+skinparam maxMessageSize 110
+
+actor Customer
+actor Agent
+actor "Support employee" as Support
+actor Admin
+
+component "REST API\nPresentation layer\n20+ endpoints; OpenAPI" as API
+
+package "Business layer — PayLink modular monolith" as PayLink {
+  component "Accounts and Wallet\nmanual support block / unblock" as AccountsWallet
+  component "Biller Catalog\nbillers, services, service ranges" as BillerCatalog
+  component "Payment Processing" as PaymentProcessing
+  component "Biller Integration" as BillerIntegration
+  component "Fees and Commissions" as FeesCommissions
+  component "Notifications" as Notifications
+  component "Fraud Checks (extra)\nglobal 5–10,000 EGP range check" as FraudChecks
+  component "Reconciliation (extra)" as Reconciliation
+}
+
+package "Cross-cutting components (not modules)" as CrossCutting {
+  component "Authentication and roles" as AuthRoles
+  component "Audit log\nmoney movements: who, when, why" as AuditLog
+  component "Configuration store\nfees and limits" as ConfigStore
+}
+
+database "Relational database\n(at least 10 tables)" as Database
+
+Customer --> API : REST
+Agent --> API : REST
+Support --> API : REST
+Admin --> API : REST
+
+API --> AuthRoles : authenticate / authorize
+API --> AccountsWallet : account / wallet / top-up
+API --> BillerCatalog : billers / services
+API --> PaymentProcessing : inquiry / pay
+API --> BillerIntegration : callback
+API --> Reconciliation : support report
+API --> ConfigStore : admin configuration
+
+PayLink --> Database
+AccountsWallet --> AuditLog : money movements
+@enduml
+
+@startuml
+!pragma layout smetana
+' Diagram 2: Payment Processing and Biller Integration contract — Phase 1
+left to right direction
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam packagePadding 30
+skinparam linetype ortho
+skinparam shadowing false
+
+package "PayLink payment modules" {
+  component "Payment Processing\nowns Biller interface\napplies state transitions" as PaymentProcessing
+  interface "Biller interface" as BillerPort
+  component "Biller Integration\none adapter per biller\nreturns normalized results" as BillerIntegration
+  component "Fees and Commissions" as FeesCommissions
+}
+component "Configuration store\nfee rules" as ConfigStore
+
+PaymentProcessing --> FeesCommissions : fee calculation
+ConfigStore --> FeesCommissions : configured fees
+
+PaymentProcessing --> BillerPort : inquiry / pay / query
+BillerIntegration ..|> BillerPort : implements with adapters
+BillerIntegration --> PaymentProcessing : normalized result
+@enduml
+
+@startuml
+!pragma layout smetana
+' Diagram 3: Per-biller adapters and external file/callback flows — Phase 1
+left to right direction
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam wrapWidth 150
+skinparam maxMessageSize 115
+
+package "Biller Integration" as Integration {
+  component "ElectroCo adapter" as ElectroAdapter
+  component "AquaCo adapter" as AquaAdapter
+  component "TopUpNet adapter" as TopUpAdapter
+  component "NetCo adapter (optional)" as NetCoAdapter
+}
+
+package "External billers" {
+  component "ElectroCo\nREST / JSON" as ElectroCo
+  component "AquaCo\nSOAP-style XML" as AquaCo
+  component "TopUpNet\nREST / JSON" as TopUpNet
+  component "NetCo (optional)\ndaily batch CSV" as NetCo
+}
+
+component "REST API\nTopUpNet callback endpoint" as API
+artifact "NetCo result CSV\n(next morning)" as NetCoResult
+
+ElectroAdapter --> ElectroCo : REST / JSON
+AquaAdapter --> AquaCo : SOAP-style XML
+TopUpAdapter --> TopUpNet : payment request + callback URL
+TopUpNet --> API : asynchronous callback
+API --> TopUpAdapter : callback payload
+
+NetCoAdapter --> NetCo : daily payment CSV
+NetCo --> NetCoResult : sends result
+NetCoResult --> NetCoAdapter : processed by adapter
+
+note bottom of Integration
+  Adapters hide biller protocols and return normalized results
+  through the Biller interface to Payment Processing.
+end note
+@enduml
+
+@startuml
+!pragma layout smetana
+' Diagram 4: Fraud check inputs and block ownership — Phase 1
+left to right direction
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam wrapWidth 155
+skinparam maxMessageSize 120
+
+component "Accounts and Wallet\nstores blocked status; manual support block / unblock" as AccountsWallet
+component "Payment Processing\ncomputes daily total" as PaymentProcessing
+component "Fraud Checks (extra)\nglobal 5–10,000 EGP range check" as FraudChecks
+component "Configuration store\nlimits and fee rules" as ConfigStore
+
+AccountsWallet --> PaymentProcessing : verification / blocked status
+PaymentProcessing --> FraudChecks : payment + account context + daily total
+FraudChecks --> PaymentProcessing : check result / velocity-block decision
+PaymentProcessing --> AccountsWallet : persist automatic velocity block
+ConfigStore --> FraudChecks : configured limits
+
+note bottom of FraudChecks
+  Fraud Checks decides automatic velocity blocks.
+  Accounts and Wallet owns the stored blocked status and manual
+  support block / unblock. Payment Processing passes account data
+  and the daily total; Fraud Checks does not call Accounts and Wallet.
+end note
+@enduml
+
+@startuml
+!pragma layout smetana
+' Diagram 5: Non-blocking notification flow — Phase 1
+left to right direction
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+
+component "Payment Processing" as PaymentProcessing
+component "Notifications" as Notifications
+
+package "External notification providers" as Providers {
+  component "SMS provider" as SMS
+  component "Email provider" as Email
+  component "Push provider" as Push
+}
+
+PaymentProcessing ..> Notifications : non-blocking outcome notice
+Notifications --> Providers : deliver message
+
+note bottom of Notifications
+  Notification failure never stops or rolls back a payment.
+  An SMS or email delivery failure is retried 3 times, then marked undelivered.
+end note
+@enduml
+
+@startuml
+!pragma layout smetana
+' Diagram 6: Settlement reconciliation flow — Phase 1
+left to right direction
+skinparam componentStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam wrapWidth 155
+skinparam maxMessageSize 125
+
+component "Biller\n(ElectroCo example)" as Biller
+artifact "Settlement file" as SettlementFile
+component "Reconciliation (extra)" as Reconciliation
+component "Payment Processing" as PaymentProcessing
+database "Relational database\nPayLink payment records" as Database
+
+Biller --> SettlementFile : sends file
+SettlementFile --> Reconciliation : nightly input
+Reconciliation --> Database : compare records
+Reconciliation --> PaymentProcessing : reconciliation result
+
+note bottom of Reconciliation
+  Reconciliation compares the biller file with PayLink records
+  and reports differences. Payment Processing applies any
+  resulting payment-state transition.
+end note
+
+note bottom of SettlementFile
+  NetCo's next-morning result CSV is handled by Biller Integration,
+  not as this settlement file. See the Biller Integration diagram in this file.
+end note
+@enduml
