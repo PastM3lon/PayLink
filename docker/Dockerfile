@@ -1,4 +1,17 @@
-FROM python:3.12
+FROM node:24-slim AS build
 WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
-CMD ["python", "main.py"]
+RUN npm run build
+RUN npm prune --omit=dev
+
+FROM node:24-slim
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY package.json ./
+USER node
+EXPOSE 3000
+CMD ["node", "dist/main.js"]
